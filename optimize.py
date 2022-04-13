@@ -2,8 +2,8 @@ import meals
 import constraints
 import math
 
-in_val = [None] * len(meals.Meals)
-#x1 = in_val[0] = number of sesame bagels
+in_val = [(0, 31)] * len(meals.Meals)
+#x1 = in_val[0] = number of sesame bagels (as a range of two numbers)
 #x2 = in_val[1] = number of protein shakes
 # ... etc
 
@@ -36,3 +36,19 @@ def objective_fn(in_val, a, b, c):
 # TODO: Assess constraints, and if any are false, trim that branch of searching
 
 # TODO: Some pseudocode for the general algorithm
+# Input: in_val is list of tuples, with each tuple representing a range of integer values that
+#        particular input could be, eg [(8, 15), (0, 31), (0, 31)] means
+#        8 <= x1 <= 15,  0 <= x2 <= 32,  0 <= x3 <= 32
+#
+# When performing a branch, take an arbitrary input, and cut its range in half, creating two
+# new nodes in the branch and bound graph. So [(8, 15), (0, 31), (0, 31)] could become
+# [(8, 15), (0, 15), (0, 31)]  and  [(8, 15), (16, 31), (0, 31)]
+#
+# When each tuple is two of the same numbers (eg 4 <= xi <= 4), then xi = 4
+# Test for this case with (returns T/F):    all([x == y for x,y in in_val])
+# Simplify list and remove tuples with:     new_list = [x for x,y in in_val]
+
+
+# TODO: Nonlinear optimizer, given optimization fn, list of equality constraints, and list of
+#       inequality constraints, return an optimal solution. This meants constraints can't be
+#       expressed in the form of predicates
