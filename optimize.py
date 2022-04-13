@@ -29,6 +29,13 @@ def entropy(in_val):
 def objective_fn(in_val, a, b, c):
     return a*cost(in_val) + b*time(in_val) - c*entropy(in_val)
 
+# TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
+# of inequality constraints, return an optimal solution. This meants constraints can't be
+# expressed in the form of predicates
+def kkt(obj_fn, eq_constraints, ineq_constraints, num_inputs):
+    # TODO(Oren): Need derivatives as inputs to compute lagrangian multipliers?
+    solution = [0.5] * num_inputs
+    return (obj_fn(solution), solution)
 
 # Main function
 # Inputs: in_val, meals.Meals, and constraints.Constraints
@@ -48,7 +55,3 @@ def objective_fn(in_val, a, b, c):
 # Test for this case with (returns T/F):    all([x == y for x,y in in_val])
 # Simplify list and remove tuples with:     new_list = [x for x,y in in_val]
 
-
-# TODO: Nonlinear optimizer, given optimization fn, list of equality constraints, and list of
-#       inequality constraints, return an optimal solution. This meants constraints can't be
-#       expressed in the form of predicates
