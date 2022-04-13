@@ -1,6 +1,6 @@
 import meals
 import constraints
-import numpy as np
+import math
 
 in_val = [None] * len(meals.Meals)
 #x1 = in_val[0] = number of sesame bagels
@@ -8,14 +8,23 @@ in_val = [None] * len(meals.Meals)
 # ... etc
 
 def cost(in_val):
-    return sum([x * meal.Meals[i]["cost"] for i, x in enumerate(in_val)])
+    return sum([n * meal.Meals[i]["cost"] for i, n in enumerate(in_val)])
 
 def time(in_val):
-    return sum([x * meal.Meals[i]["time"] for i, x in enumerate(in_val)])
+    return sum([n * meal.Meals[i]["time"] for i, n in enumerate(in_val)])
 
 def entropy(in_val):
-    # TODO(Oren Bell): return variety of diet
-    return None
+    occurence = {}
+    for i, n in enumerate(in_val):
+        meal = meals.Meals[i]
+        for t in meal["tags"]:
+            if not t in occurence:
+                occurence[t] = 0
+            occurence[t] += n * meals.Meals[i]["calories"] / len(meal["tags"])
+
+    variance = 0
+    for v in occurence:
+        variance -= v * math.log(v)
 
 def objective_fn(in_val, a, b, c):
     return a*cost(in_val) + b*time(in_val) - c*entropy(in_val)
