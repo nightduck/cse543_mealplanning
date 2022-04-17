@@ -4,76 +4,144 @@
 # 20% DV or more of a nutrient per serving is considered high.
 
 def prep_time_constraint(in_list):  # in minutes
-    return 0 < sum([x * meal.Meals[i]["prep_time"] for i, x in enumerate(in_list)]) < 60
+    return sum([x * meal.Meals[i]["time"] for i, x in enumerate(in_list)]) - 60
 
 
+# keep total calories under 2500 per day (but no less than 1500)
 def calories_constraint(in_list):  # in cal
-    return 1500 < sum([x * meal.Meals[i]["calories"] for i, x in enumerate(in_list)]) < 2500
+    cal_sum = sum([x * meal.Meals[i]["cal"] for i, x in enumerate(in_list)])
+    if cal_sum >= 1500:
+        return cal_sum - 2500
+    else:  # when cal_sum < 1500, cal_sum + 1500 always returns positive value which implies violated constraint
+        return cal_sum + 1500
 
 
 def cost_constraint(in_list):  # in $
-    return 0 < sum([x * meal.Meals[i]["cost"] for i, x in enumerate(in_list)]) < 10
+    return sum([x * meal.Meals[i]["cost"] for i, x in enumerate(in_list)]) - 10
 
 
 def carbs_constraint(in_list):  # in grams
-    return 261.25 < sum([x * meal.Meals[i]["carbs"] for i, x in enumerate(in_list)]) < 330
+    carbs_sum = sum([x * meal.Meals[i]["carbs"] for i, x in enumerate(in_list)])
+    if carbs_sum >= 261.25:
+        return carbs_sum - 330
+    else:
+        return carbs_sum + 261.25
 
 
 def protein_constraint(in_list):  # in grams
-    return 47.5 < sum([x * meal.Meals[i]["protein"] for i, x in enumerate(in_list)]) < 60
+    protein_sum = sum([x * meal.Meals[i]["protein"] for i, x in enumerate(in_list)])
+    if protein_sum >= 47.5:
+        return protein_sum - 60
+    else:
+        return protein_sum + 47.5
 
 
 def fat_constraint(in_list):  # in grams
-    return 74.1 < sum([x * meal.Meals[i]["fat"] for i, x in enumerate(in_list)]) < 93.6
+    fat_sum = sum([x * meal.Meals[i]["fat"] for i, x in enumerate(in_list)])
+    if fat_sum >= 74.1:
+        return fat_sum - 93.6
+    else:
+        return fat_sum + 74.1
 
 
 def sugar_constraint(in_list):  # in grams
-    return 47.5 < sum([x * meal.Meals[i]["sugar"] for i, x in enumerate(in_list)]) < 60
+    sugar_sum = sum([x * meal.Meals[i]["sugar"] for i, x in enumerate(in_list)])
+    if sugar_sum >= 47.5:
+        return sugar_sum - 60
+    else:
+        return sugar_sum + 47.5
 
 
 def saturated_fat_constraint(in_list):  # in grams
-    return 19 < sum([x * meal.Meals[i]["saturated_fat"] for i, x in enumerate(in_list)]) < 24
+    satfat_sum = sum([x * meal.Meals[i]["satfat"] for i, x in enumerate(in_list)])
+    if satfat_sum >= 19:
+        return satfat_sum - 24
+    else:
+        return satfat_sum + 19
 
 
 def fiber_constraint(in_list):  # in grams
-    return 26.6 < sum([x * meal.Meals[i]["fiber"] for i, x in enumerate(in_list)]) < 33.6
+    fiber_sum = sum([x * meal.Meals[i]["fiber"] for i, x in enumerate(in_list)])
+    if fiber_sum >= 26.6:
+        return fiber_sum - 33.6
+    else:
+        return fiber_sum + 26.6
 
 
 def sodium_constraint(in_list):  # in mg
-    return 2185 < sum([x * meal.Meals[i]["sodium"] for i, x in enumerate(in_list)]) < 2760
+    sodium_sum = sum([x * meal.Meals[i]["sodium"] for i, x in enumerate(in_list)])
+    if sodium_sum >= 2185:
+        return sodium_sum - 2760
+    else:
+        return sodium_sum + 2185
 
 
 def vitamin_a_constraint(in_list):  # in IU
-    return 2850 < sum([x * meal.Meals[i]["vitamin_a"] for i, x in enumerate(in_list)]) < 3600
+    vita_sum = sum([x * meal.Meals[i]["vita"] for i, x in enumerate(in_list)])
+    if vita_sum >= 2850:
+        return vita_sum - 3600
+    else:
+        return vita_sum + 2850
 
 
 def vitamin_c_constraint(in_list):  # in mg
-    return 85.5 < sum([x * meal.Meals[i]["vitamin_c"] for i, x in enumerate(in_list)]) < 108
+    vitc_sum = sum([x * meal.Meals[i]["vitc"] for i, x in enumerate(in_list)])
+    if vitc_sum >= 85.5:
+        return vitc_sum - 108
+    else:
+        return vitc_sum + 85.5
 
 
 def vitamin_d_constraint(in_list):  # in IU
-    return 760 < sum([x * meal.Meals[i]["vitamin_d"] for i, x in enumerate(in_list)]) < 960
+    vitd_sum = sum([x * meal.Meals[i]["vitd"] for i, x in enumerate(in_list)])
+    if vitd_sum >= 760:
+        return vitd_sum - 960
+    else:
+        return vitd_sum + 760
 
 
 def vitamin_e_constraint(in_list):  # in IU
-    return 21.28 < sum([x * meal.Meals[i]["vitamin_e"] for i, x in enumerate(in_list)]) < 26.88
+    vite_sum = sum([x * meal.Meals[i]["vite"] for i, x in enumerate(in_list)])
+    if vite_sum >= 21.28:
+        return vite_sum - 26.88
+    else:
+        return vite_sum + 21.28
 
 
 def vitamin_b12_constraint(in_list):  # in mcg
-    return 2.28 < sum([x * meal.Meals[i]["vitamin_b12"] for i, x in enumerate(in_list)]) < 2.88
+    vitb12_sum = sum([x * meal.Meals[i]["vitb12"] for i, x in enumerate(in_list)])
+    if vitb12_sum >= 2.28:
+        return vitb12_sum - 2.88
+    else:
+        return vitb12_sum + 2.28
 
 
 def calcium_constraint(in_list):  # in mg
-    return 1235 < sum([x * meal.Meals[i]["calcium"] for i, x in enumerate(in_list)]) < 1560
+    calcium_sum = sum([x * meal.Meals[i]["calcium"] for i, x in enumerate(in_list)])
+    if calcium_sum >= 1235:
+        return calcium_sum - 1560
+    else:
+        return calcium_sum + 1235
 
 
 def iron_constraint(in_list):  # in mg
-    return 17.1 < sum([x * meal.Meals[i]["iron"] for i, x in enumerate(in_list)]) < 21.6
+    iron_sum = sum([x * meal.Meals[i]["iron"] for i, x in enumerate(in_list)])
+    if iron_sum >= 17.1:
+        return iron_sum - 21.6
+    else:
+        return iron_sum + 17.1
 
 
 def potassium_constraint(in_list):  # in mg
-    return 4465 < sum([x * meal.Meals[i]["potassium"] for i, x in enumerate(in_list)]) < 5640
+    potassium_sum = sum([x * meal.Meals[i]["potassium"] for i, x in enumerate(in_list)])
+    if potassium_sum >= 4465:
+        return potassium_sum - 5640
+    else:
+        return potassium_sum + 4465
 
 
 # Bundle them all up at the end
-Constraints = [sodium_constraint, cost_constraint]
+Constraints = [prep_time_constraint, calories_constraint, cost_constraint, carbs_constraint, protein_constraint,
+               fat_constraint, sugar_constraint, saturated_fat_constraint, fiber_constraint, sodium_constraint,
+               vitamin_a_constraint, vitamin_c_constraint, vitamin_d_constraint, vitamin_e_constraint,
+               vitamin_b12_constraint, calcium_constraint, iron_constraint, potassium_constraint]
