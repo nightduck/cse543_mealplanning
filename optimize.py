@@ -11,24 +11,99 @@ in_val = [(0, 31)] * len(meals.Meals)
 def cost(in_val):
     return sum([n * meal.Meals[i]["cost"] for i, n in enumerate(in_val)])
 
+def cost_der(in_val):
+    return [meal.Meals[i]["cost"] for i, n in enumerate(in_val)]
+
 def time(in_val):
     return sum([n * meal.Meals[i]["time"] for i, n in enumerate(in_val)])
 
-def entropy(in_val):
-    occurence = {}
+def time_der(in_val):
+    return [meal.Meals[i]["time"] for i, n in enumerate(in_val)]
+
+def tag_list(in_val):
+    tags = {}
+    index = 0
     for i, n in enumerate(in_val):
         meal = meals.Meals[i]
         for t in meal["tags"]:
-            if not t in occurence:
-                occurence[t] = 0
-            occurence[t] += n * meals.Meals[i]["calories"] / len(meal["tags"])
+            if not t in tags:
+                tags[t] = {"index" : index, "occurance": 0}
+                index += 1
+            tags[t]["occurance"] += n * meals.Meals[i]["calories"] / len(meal["tags"])
+
+    # This is a generator. Compute once, and then just return the same result again and again
+    while True:
+        yield tags
+
+def meal_tag_coefficients(in_val):
+    tags = tag_list(in_val)
+    num_tags = len(tags)
+    num_meals = len(in_val)
+
+    coef = np.ndarray((num_meals, num_tags))
+
+    for i, n in enumerate(in_val):
+        meal = meals.Meals[i]
+        for t in meal["tags"]:
+            j = tags[t]["index"]
+            coef[i, j] += meal["calories"] / len(meal["tags"])
+
+    # This is a generator. Compute once, and then just return the same result again and again
+    while True:
+        yield coef
+
+def entropy(in_val):
+    tags = tag_list(in_val)
 
     variance = 0
-    for v in occurence:
-        variance -= v * math.log(v)
+    for t in tags:
+        variance -= t["occurance"] * math.log(t["occurance"])
+
+def entropy_der(in_val):
+    tags = tag_list(in_val)
+
+    coefs = meal_tag_coefficients(in_val)
+    gradient = np.zeros(len(in_val))
+
+    for i, x in enumerate(gradient):
+
+        # Compute summatation at this entry in vector
+        result = 0
+        for t in tags:
+            coef = coefs[i, t["index"]]
+            result += coef + coef * math.log(t["occurance"])
+        gradient[i] = result
+    
+    return gradient
+
+def entropy_hes(in_val):
+    tags = tag_list(in_val)
+
+    coefs = meal_tag_coefficients(in_val)
+    hessian = np.zeros((len(in_val), len(in_val)))
+
+    for a, xa in enumerate(in_val):
+        for b, xb in enumerate(in_val):
+
+            # Compute sumation at this entry in matrix
+            result = 0
+            for t in tags:
+                coef_aj = coefs[a, t["index"]]
+                coef_bj = coefs[b, t["index"]]
+                result += coef_aj * coef_bj / t["occurance"]
+
+            hessian[a,b] = result
+
+    return hessian
 
 def objective_fn(in_val, a, b, c):
     return a*cost(in_val) + b*time(in_val) - c*entropy(in_val)
+
+def obj_der(in_val, a, b, c):
+    return a*cost_der(in_val) + b*time_der(in_val) - c*entropy_der(in_val)
+
+def obj_hes(in_val, a, b, c):
+    return - c*entropy_hes(in_val)
 
 # TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
