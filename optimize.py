@@ -10,8 +10,14 @@ in_val = [(0, 31)] * len(meals.Meals)
 def cost(in_val):
     return sum([n * meal.Meals[i]["cost"] for i, n in enumerate(in_val)])
 
+def cost_der(in_val):
+    return [meal.Meals[i]["cost"] for i, n in enumerate(in_val)]
+
 def time(in_val):
     return sum([n * meal.Meals[i]["time"] for i, n in enumerate(in_val)])
+
+def time_der(in_val):
+    return [meal.Meals[i]["time"] for i, n in enumerate(in_val)]
 
 def entropy(in_val):
     occurence = {}
@@ -26,8 +32,20 @@ def entropy(in_val):
     for v in occurence:
         variance -= v * math.log(v)
 
+def entropy_der(in_val):
+    return np.zeros(len(in_val))
+
+def entropy_hes(in_val):
+    return np.zeros((len(in_val), len(in_val)))
+
 def objective_fn(in_val, a, b, c):
     return a*cost(in_val) + b*time(in_val) - c*entropy(in_val)
+
+def obj_der(in_val, a, b, c):
+    return a*cost_der(in_val) + b*time_der(in_val) - c*entropy_der(in_val)
+
+def obj_hes(in_val, a, b, c):
+    return - c*entropy_hes(in_val)
 
 # TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
