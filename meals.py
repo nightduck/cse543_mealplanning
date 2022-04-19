@@ -38,13 +38,14 @@ def CompileMealList():
 		entry = {}
 
 		entry["name"] = text[0]
-		entry["tags"] = text[1]
+		entry["tags"] = text[1].replace(" ", "").split(',')
 		for i in range(2,13):
 			entry[titles[i]] = num[i-2]
 
 		meals.append(entry)
 
-	print(meals)
+	#print(meals)
+	return meals
 
 # Main
-CompileMealList()
+Meals = CompileMealList()
