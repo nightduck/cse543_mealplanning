@@ -3,6 +3,8 @@ import contraints
 import math
 import numpy as np
 import heapq
+from scipy.optimize import Bounds, LinearConstraint, minimize
+from functools import partial
 
 
 tag_index = {}
@@ -10,16 +12,16 @@ in_val_buffer = []
 occurances_buffer = None
 
 def cost(in_val):
-    return sum([n * meal.Meals[i]["cost"] for i, n in enumerate(in_val)])
+    return sum([n * meals.Meals[i]["cost"] for i, n in enumerate(in_val)])
 
 def cost_der(in_val):
-    return [meal.Meals[i]["cost"] for i, n in enumerate(in_val)]
+    return [meals.Meals[i]["cost"] for i, n in enumerate(in_val)]
 
 def time(in_val):
-    return sum([n * meal.Meals[i]["time"] for i, n in enumerate(in_val)])
+    return sum([n * meals.Meals[i]["time"] for i, n in enumerate(in_val)])
 
 def time_der(in_val):
-    return [meal.Meals[i]["time"] for i, n in enumerate(in_val)]
+    return [meals.Meals[i]["time"] for i, n in enumerate(in_val)]
 
 def tag_occurance(in_val):
     # Litle buffering to not repeat computation for function, derivative, and hessian
@@ -50,7 +52,11 @@ def entropy(in_val):
     variance = 0
     for p in occurances:
         if p != 0:
-            variance -= p * math.log(p)
+            try:
+                variance -= p * math.log(p)
+            except Exception as err:
+                print(p)
+                raise err
 
     return variance
 
@@ -65,14 +71,14 @@ def entropy_der(in_val):
         # Compute summatation at this entry in vector
         result = 0
         for j, p in enumerate(occurances):
-            coef = coefs[i, j]
+            coef = coefs[i, j] / total
             if coef != 0:   # If coef is zero, then dp/dx is zero
                 if p == 0:  # If p is zero anyways, then x is zero, and dp/dx is inf
                     assert(in_val[i] == 0)
                     result = math.inf
                 else:
-                    result -= coef + coef * math.log(p)
-        gradient[i] = result / total
+                    result -= coef + coef * math.log(p / total)
+        gradient[i] = result
     
     return gradient
 
@@ -88,34 +94,37 @@ def entropy_hes(in_val):
             # Compute sumation at this entry in matrix
             result = 0
             for j, p in enumerate(occurances):
-                coef_aj = coefs[a, j]
-                coef_bj = coefs[b, j]
+                coef_aj = coefs[a, j] / total
+                coef_bj = coefs[b, j] / total
                 if coef_aj != 0 and coef_bj != 0:
                     if p == 0:
                         result = -math.inf
                     else:
-                        result -= coef_aj * coef_bj / p
+                        result -= coef_aj * coef_bj / p / total
 
             hessian[a,b] = result
 
-    return hessian / total
+    return hessian
 
-def objective_fn(in_val, a, b, c):
-    return a*cost(in_val) + b*time(in_val) - c*entropy(in_val)
+def objective_fn(a, b, c, in_val):
+    return np.multiply(a, cost(in_val)) + np.multiply(b, time(in_val)) #- np.multiply(c, entropy(in_val))
 
-def obj_der(in_val, a, b, c):
-    return a*cost_der(in_val) + b*time_der(in_val) - c*entropy_der(in_val)
+def obj_der(a, b, c, in_val):
+    return np.multiply(a, cost_der(in_val)) + np.multiply(b, time_der(in_val)) #- np.multiply(c, entropy_der(in_val))
 
-def obj_hes(in_val, a, b, c):
-    return - c*entropy_hes(in_val)
+def obj_hes(a, b, c, in_val):
+    return np.zeros((len(in_val), len(in_val)))
+    #return - c*entropy_hes(in_val)
 
 # TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
 # expressed in the form of predicates
-def kkt(obj_fn, eq_constraints, ineq_constraints, num_inputs):
-    # TODO(Oren): Need derivatives as inputs to compute lagrangian multipliers?
-    solution = [0.5] * num_inputs
-    return (obj_fn(solution), solution)
+def relaxed_optimization(a, b, c, constraints, bounds):    
+    res = minimize(partial(objective_fn, a, b, c), [8] * 31, method="trust-constr",
+            jac=partial(obj_der, a, b, c), hess=partial(obj_hes, a, b, c),
+            constraints=constraints + [bounds], options={'verbose': 1})
+
+    return (objective_fn(a, b, c, res.x), res.x)
 
 # Main function
 # Inputs: in_val, meals.Meals, and constraints.Constraints
@@ -172,12 +181,6 @@ def branch_and_bound(obj_fn, eq_constraints, ineq_constraints, num_inputs):
     # if it returns None, it never found an integer solution. Hopefully shouldn't happen.
     print("Total nodes explored: " + i)
     return best_solution
-            
-
-
-
-
-
 
 
 # TODO: Assess constraints, and if any are false, trim that branch of searching
@@ -195,6 +198,44 @@ def branch_and_bound(obj_fn, eq_constraints, ineq_constraints, num_inputs):
 # Test for this case with (returns T/F):    all([x == y for x,y in in_val])
 # Simplify list and remove tuples with:     new_list = [x for x,y in in_val]
 
+def example_call_to_relaxed_optimize():
+    # If you want to bound a variable, add a constraint. Constraints are modelled as follows
+    # lower <= a*x0 + b*x1 + ... z*x26 <= upper
+    # but in matrix form
+    # 
+    # |0|    | 1 0 0 |    |32|
+    # |5| <= | 0 1 0 | <= | 5|
+    # |4|    | 0 0 1 |    | 8|
+    #
+    # The above means x0 is unbounded (between 0 and 32), x1 == 5, and x2 is between 4 and 8
+    
+    # This is expressed as a linear constraint. First argument is the identity matrix.
+    # Second and third arguments are lower and uppers bounds on each variable
+    bounds = LinearConstraint(np.identity(3), [0,5,4], [32,5,8])
+
+    # Equality constraints here are modelled as two opposing inequality constraints
+    
+    # Tri will provide an array of these LinearConstraint's
+    cals = [m["cal"] for m in meals.Meals]
+    linear_constraints = [LinearConstraint(cals, [17500], [np.inf])]
+
+    # Redefine bounds for the whole input space
+    lower_bounds = [0]*len(meals.Meals)
+    upper_bounds = [16]*len(meals.Meals)
+    lower_bounds[3] = 4     # Artifically constrain this variable
+    upper_bounds[3] = 8
+    bounds = LinearConstraint(np.identity(len(meals.Meals)), lower_bounds, upper_bounds)
+
+    # We specify the objective fn, the jacobian, the hessian, the 3 preference coefficients,
+    # Tri's linear constraints, and your bounds
+    a = 5
+    b = 1
+    c = 0.1
+    value, solution = relaxed_optimization(a, b, c,
+        linear_constraints, bounds)
+
+    print("Relaxed solution of %f at %s" % (value, str(solution)))
+
 
 counter = 0
 for m in meals.Meals:
@@ -203,16 +244,11 @@ for m in meals.Meals:
             tag_index[t] = counter
             counter += 1
 
-coefs = np.ndarray((len(meals.Meals), len(tag_index)))
+coefs = np.ndarray((len(meals.Meals), len(tag_index)), dtype=np.float64)
 
 for i, meal in enumerate(meals.Meals):
     for t in meal["tags"]:
         j = tag_index[t]
         coefs[i, j] += meal["cal"] / len(meal["tags"])
 
-
-
-#in_val = [(0, 31)] * len(meals.Meals)
-#x1 = in_val[0] = number of sesame bagels (as a range of two numbers)
-#x2 = in_val[1] = number of protein shakes
-# ... etc
+example_call_to_relaxed_optimize()
