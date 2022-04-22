@@ -122,22 +122,39 @@ def obj_hes(a, b, c, in_val):
 def relaxed_optimization(a, b, c, constraints, bounds):    
     res = minimize(partial(objective_fn, a, b, c), [8] * 31, method="trust-constr",
             jac=partial(obj_der, a, b, c), hess=partial(obj_hes, a, b, c),
-            constraints=constraints + [bounds], options={'verbose': 1})
+            constraints=constraints, bounds=bounds, options={'verbose': 0})
 
-    return (objective_fn(a, b, c, res.x), res.x)
+    return (objective_fn(a, b, c, res.x), res.x, res.constr_violation)
 
 # Main function
 # Inputs: in_val, meals.Meals, and constraints.Constraints
 # TODO: Branch and bound here, with that relaxation thing whatchamacallit
 # branch: create a set of children, which are just represented as an additional constraint, setting
 # a certain meal to be used a certain number of times.
-def branch(split_value, index):
+def branch(bounds, split_value, index):
     # first will be <= 0 if x[index] <= split_value, second will be <= 0 if x[index] > split_value
-    return [[lambda x: x[index]-split_value], [lambda x: split_value-x[index]]]
+    # TODO: rather than always add additional inequality bounds, check list of bounds to add equality bound as needed
+    # also, check for any conflicting bounds
+    right_lower = np.copy(bounds.lb)
+    right_upper = np.copy(bounds.ub)
+    # set upper bound of left branch to floor of found value
+    bounds.ub[index] = math.floor(split_value)
+    # set lower bound of right branch to ceiling of found value
+    right_lower[index] = math.ceil(split_value)
+    if right_lower[index] >= right_upper[index]:
+        right_lower[index] = right_upper[index]
+    if bounds.lb[index] >= bounds.ub[index]:
+        bounds.lb[index] = bounds.ub[index]
+         # special case
+    # elif bounds.lb[index] >= bounds.ub[index]:
+        # also special case
+    # make two bounds constraints: old_lower <= variable < floor, ceil < variable <= old_upper
+    # (lower branch = old constraint modified in-place, upper branch = new constraint)
+    return [bounds, Bounds(right_lower, right_upper)]
 
 # return true iff solution is entirely integers
 def is_integer(solution):
-    return all([abs(round(x)-x) <= 1e-3 for x in solution])
+    return all([abs(round(x)-x) <= 5e-3 for x in solution])
 
 # return first index of a non-integer value
 def find_noninteger(solution):
@@ -146,41 +163,66 @@ def find_noninteger(solution):
             return i
     return -1
 
+def ex_opt(x):
+    return -5*x[0]-8*x[1]
+
+def ex_opt_scorer(a,b,c,x):
+    return ex_opt(x)
+
+def ex_jac(x):
+    return np.array([-5,-8], dtype=np.float64)
+
+def ex_hess(x):
+    return np.array([[0,0],[0,0]], dtype=np.float64)
+
+def ex_test_opt(a,b,c,cons,bds):
+    res = minimize(ex_opt, [0] * 2, method="trust-constr",
+            jac=ex_jac, hess=ex_hess,
+            constraints=cons, bounds=bds)
+
+    return (ex_opt(res.x), res.x, res.constr_violation)
+
+def to_int(x):
+    return [round(a) for a in x]
 # run branch and bound
-def branch_and_bound(obj_fn, eq_constraints, ineq_constraints, num_inputs):
-    base_solution = kkt(obj_fn, eq_constraints, ineq_constraints, num_inputs)
+def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     # initial "minimum" value -> infinity (beaten by any valid solution)
-    best_value = math.inf
+    best_value = np.inf
     best_solution = None
     # i is just some metadata about how many nodes were explored
     i = 1
     # base constraints for the root of the tree
     # as we branch, we add additional constraints (e.g. num bagels > 3, num pasta < 4, etc)
-    bb_heap = [(eq_constraints, ineq_constraints)]
+    # dummy score to start off with
+    bb_heap = [(0,0, bounds)]
     # while some branches have yet to be explored
     while len(bb_heap) > 0:
-        eq_cons, ineq_cons = heapq.heappop(bb_heap)
-        soln = kkt(obj_fn, eq_cons, ineq_cons, num_inputs)
-        score = obj_fn(soln)
-        # even relaxed problem doesn't beat our best integer score so far
-        if score > best_value:
+        _, _, bds = heapq.heappop(bb_heap)
+        score, solution, violation = relaxed_method(a,b,c,constraints,bds)
+        # either unsatisfiable constraints, or even the best available score here is worse than the best we've found so far
+        if violation > 1e-3 or score > best_value:
             pass
-        # solution is integer-valued and has beaten the best integer-valued score so far
-        elif is_integer(soln) and score < best_value:
-            best_value = score
-            best_solution = soln
+        # solution is integer-valued (bottom of branch)
+        elif is_integer(solution):
+            # if new best value, or if none previously existed, update scores and solution
+            intsol = to_int(solution)
+            intscore = obj_fn(a,b,c,intsol)
+            if best_value is None or intscore < best_value:
+                best_solution = intsol
+                best_score = intscore
         # need to branch , choose unconstrained index to branch on
         else:
             # find index to branch on, create new inequality constraints
-            index = find_noninteger(soln)
-            new_children = branch(soln[index], index)
+            index = find_noninteger(solution)
+            new_children = branch(bds, solution[index], index)
             # create new node with updated constraints
+            # min-heap sorted by score of solution, tie-broken by index
             for child in new_children:
-                heapq.heappush(bb_heap, (eq_cons, child.extend(ineq_cons)))
+                heapq.heappush(bb_heap, (score, i, child))
                 i=i+1
     # if it returns None, it never found an integer solution. Hopefully shouldn't happen.
-    print("Total nodes explored: " + i)
-    return best_solution
+    print(f"Total nodes explored: {i}")
+    return best_score, best_solution
 
 
 # TODO: Assess constraints, and if any are false, trim that branch of searching
@@ -211,8 +253,7 @@ def example_call_to_relaxed_optimize():
     
     # This is expressed as a linear constraint. First argument is the identity matrix.
     # Second and third arguments are lower and uppers bounds on each variable
-    bounds = LinearConstraint(np.identity(3), [0,5,4], [32,5,8])
-
+    bounds = Bounds([0,5,4], [32,5,8])
     # Equality constraints here are modelled as two opposing inequality constraints
     
     # Tri will provide an array of these LinearConstraint's
@@ -224,17 +265,29 @@ def example_call_to_relaxed_optimize():
     upper_bounds = [16]*len(meals.Meals)
     lower_bounds[3] = 4     # Artifically constrain this variable
     upper_bounds[3] = 8
-    bounds = LinearConstraint(np.identity(len(meals.Meals)), lower_bounds, upper_bounds)
+    bounds = Bounds(lower_bounds, upper_bounds)
 
     # We specify the objective fn, the jacobian, the hessian, the 3 preference coefficients,
     # Tri's linear constraints, and your bounds
     a = 5
     b = 1
     c = 0.1
-    value, solution = relaxed_optimization(a, b, c,
+    value, solution, violation = relaxed_optimization(a, b, c,
         linear_constraints, bounds)
 
     print("Relaxed solution of %f at %s" % (value, str(solution)))
+
+def example_call_to_branch_and_bound():
+    constraint_matrix = np.array([[5,9],[1,1]], dtype=np.float64)
+    lower = np.array([0,0], dtype=np.float64)
+    upper = np.array([45,6], dtype=np.float64)
+    constraints = LinearConstraint(constraint_matrix, lower, upper)
+    bounds = Bounds([0,0], [6,6])
+    a = 1
+    b = 1
+    c = 1
+    value, solution = branch_and_bound(ex_test_opt, ex_opt_scorer, a,b,c,constraints, bounds)
+    print(f"Best b-b solution is {solution}, with score {value}.")
 
 
 counter = 0
@@ -252,3 +305,5 @@ for i, meal in enumerate(meals.Meals):
         coefs[i, j] += meal["cal"] / len(meal["tags"])
 
 example_call_to_relaxed_optimize()
+
+example_call_to_branch_and_bound()
