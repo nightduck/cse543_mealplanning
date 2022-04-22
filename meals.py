@@ -36,13 +36,14 @@ def CompileMealList():
 
 	meals = []
 	for text,num in zip(texts,nums):
-		#print(t,n)
 		entry = {}
 
+		# First 2 columns are strings
 		entry["name"] = text[0]
-		entry["tags"] = text[1]
+		entry["tags"] = text[1].replace(" ", "").split(',')
+
+		# The rest is numeric data
 		for i in range(2,numCols):
-			print(i)
 			entry[titles[i]] = num[i-2]
 
 		meals.append(entry)
@@ -52,3 +53,4 @@ def CompileMealList():
 # Main
 meals = CompileMealList()
 print(meals)
+
