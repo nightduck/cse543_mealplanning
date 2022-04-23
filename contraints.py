@@ -1,12 +1,39 @@
-# Define nutrition constraints using scipy linear constraints
-# https://www.fda.gov/food/new-nutrition-facts-label/daily-value-new-nutrition-and-supplement-facts-labels
-# 5% DV or less of a nutrient per serving is considered low.
-# 20% DV or more of a nutrient per serving is considered high.
-# As we considering weekly value, lower bound and upper bound are multiplied by 7.
+"""
+Define nutrition constraints using scipy linear constraints
+https://www.fda.gov/food/new-nutrition-facts-label/daily-value-new-nutrition-and-supplement-facts-labels
+5% DV or less of a nutrient per serving is considered low.
+20% DV or more of a nutrient per serving is considered high.
+As we considering weekly value, lower bound and upper bound are multiplied by 7.
+For macros, carbs: 45–65% of total calories, fats: 20–35% of total calories, proteins: 10–35% of total calories
+"""
 
 import numpy as np
 import meals
 from scipy.optimize import LinearConstraint
+from functools import reduce
+
+
+def define_macro_constraint(nutrient: str, lower_percentage=0.45, upper_percentage=0.65):
+    # check if nutrient is in each meal
+    for m in meals.Meals:
+        if nutrient not in m.keys():
+            m[nutrient] = 0
+
+    # e.g. for carbs, 45% cal <= carbs <= 65% cal
+    # convert to grams to cal
+    macro_constraint = [(m[nutrient] * 7.71618) for m in meals.Meals]
+    lower_macro_constraint = [(m['cal'] * lower_percentage) for m in meals.Meals]
+    upper_macro_constraint = [(m['cal'] * upper_percentage) for m in meals.Meals]
+
+    # 45% cal <= carbs ( or 0 <= -45% cal + carbs)
+    macro_constraint_1 = [(-lower_macro_constraint[i] + macro_constraint[i]) for i in range(len(meals.Meals))]
+
+    # carbs <= 65% cal ( or 0 <= -carbs + 65% cal)
+    macro_constraint_2 = [(-macro_constraint[i] + upper_macro_constraint[i]) for i in range(len(meals.Meals))]
+
+    final_macro_constraint = [LinearConstraint(macro_constraint_1, [0.0], [np.inf]),
+                              LinearConstraint(macro_constraint_2, [0.0], [np.inf])]
+    return final_macro_constraint
 
 
 def define_constraint(nutrient: str, lower_bound=0.0, upper_bound=np.inf):
@@ -44,7 +71,16 @@ def get_nutrition_constraints():
     return linear_constraints
 
 
-Constraints = get_nutrition_constraints()
+def get_macro_constraints():
+    carbs_macro_constraint = define_macro_constraint("carbs", lower_percentage=0.45, upper_percentage=0.65)
+    fat_macro_constraint = define_macro_constraint("fat", lower_percentage=0.25, upper_percentage=0.35)
+    protein_macro_constraint = define_macro_constraint("protein", lower_percentage=0.10, upper_percentage=0.35)
+    macro_constraints = [carbs_macro_constraint, fat_macro_constraint, protein_macro_constraint]
+    macro_constraints = reduce(lambda x, y: x+y, macro_constraints)
+    return macro_constraints
+
+
+Constraints = get_nutrition_constraints() + get_macro_constraints()
 
 if __name__ == "__main__":
     print(Constraints)
