@@ -196,18 +196,33 @@ def to_int(x):
 # run branch and bound
 def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     # initial "minimum" value -> infinity (beaten by any valid solution)
-    best_value = np.inf
+    best_value = np.inf     # Best integer solution
     best_solution = None
+    best_score = None       # Best relaxed solution
     # i is just some metadata about how many nodes were explored
     i = 1
     # base constraints for the root of the tree
     # as we branch, we add additional constraints (e.g. num bagels > 3, num pasta < 4, etc)
     # dummy score to start off with
-    bb_heap = [(0,0, bounds)]
+    bb_heap = [(np.inf,0, bounds)]
     # while some branches have yet to be explored
     while len(bb_heap) > 0:
         _, _, bds = heapq.heappop(bb_heap)
+
+        state = []
+        for l, u in zip(bds.lb, bds.ub):
+            if l == u:
+                state.append(l)
+            elif l > 0 or u < 8:
+                state.append("%d-%d" % (l, u))
+            else:
+                state.append('-')
+        print("Exploring: ", str(state))
+        
         score, solution, violation = relaxed_method(a,b,c,constraints,bds)
+
+        print("Relaxed score of %f", score)
+
         # either unsatisfiable constraints, or even the best available score here is worse than the best we've found so far
         if violation > 1e-3 or score > best_value:
             pass
@@ -216,9 +231,9 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
             # if new best value, or if none previously existed, update scores and solution
             intsol = to_int(solution)
             intscore = obj_fn(a,b,c,intsol)
-            if best_value is None or intscore < best_value:
+            if intscore < best_value:
                 best_solution = intsol
-                best_score = intscore
+                best_value = intscore
         # need to branch , choose unconstrained index to branch on
         else:
             # find index to branch on, create new inequality constraints
@@ -231,7 +246,7 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
                 i=i+1
     # if it returns None, it never found an integer solution. Hopefully shouldn't happen.
     print(f"Total nodes explored: {i}")
-    return best_score, best_solution
+    return best_value, best_solution
 
 
 # TODO: Assess constraints, and if any are false, trim that branch of searching
@@ -282,7 +297,7 @@ def example_call_to_relaxed_optimize():
     b = 1
     c = 0.1
     value, solution, violation = relaxed_optimization(a, b, c,
-        linear_constraints, bounds)
+        constraints.Constraints, bounds)
 
     print("Relaxed solution of %f at about" % (value))
     pretty_print_solution(solution, integer=False)
@@ -314,6 +329,13 @@ for i, meal in enumerate(meals.Meals):
         j = tag_index[t]
         coefs[i, j] += meal["cal"] / len(meal["tags"])
 
-example_call_to_relaxed_optimize()
+#example_call_to_relaxed_optimize()
 
-example_call_to_branch_and_bound()
+#example_call_to_branch_and_bound()
+
+bounds = Bounds([0] * len(meals.Meals), [128]*len(meals.Meals))
+a = b = c = 1
+value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c,
+    constraints.Constraints, bounds)
+    
+pretty_print_solution(solution)
