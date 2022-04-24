@@ -51,6 +51,8 @@ def CompileMealList():
 	return meals
 
 # Main
-meals = CompileMealList()
-print(meals)
+Meals = CompileMealList()
+
+if __name__ == "__main__":
+    print(Meals)
 

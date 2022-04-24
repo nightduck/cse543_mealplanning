@@ -1,5 +1,5 @@
 import meals
-import contraints
+import constraints
 import math
 import numpy as np
 import heapq
@@ -120,7 +120,7 @@ def obj_hes(a, b, c, in_val):
 # of inequality constraints, return an optimal solution. This meants constraints can't be
 # expressed in the form of predicates
 def relaxed_optimization(a, b, c, constraints, bounds):    
-    res = minimize(partial(objective_fn, a, b, c), [8] * 31, method="trust-constr",
+    res = minimize(partial(objective_fn, a, b, c), [8] * len(meals.Meals), method="trust-constr",
             jac=partial(obj_der, a, b, c), hess=partial(obj_hes, a, b, c),
             constraints=constraints, bounds=bounds, options={'verbose': 0})
 
