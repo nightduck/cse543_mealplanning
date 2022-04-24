@@ -116,6 +116,15 @@ def obj_hes(a, b, c, in_val):
     return np.zeros((len(in_val), len(in_val)))
     #return - c*entropy_hes(in_val)
 
+
+def pretty_print_solution(arr, integer=True):
+    for i, v in enumerate(arr):
+        name = meals.Meals[i]["name"]
+        if integer and v >= 0.5:
+            print(f"{name} : {int(v)}")
+        elif not integer and round(v, 3)>0:
+            print(f"{name} : {round(v, 3)}")            
+
 # TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
 # expressed in the form of predicates
@@ -275,7 +284,8 @@ def example_call_to_relaxed_optimize():
     value, solution, violation = relaxed_optimization(a, b, c,
         linear_constraints, bounds)
 
-    print("Relaxed solution of %f at %s" % (value, str(solution)))
+    print("Relaxed solution of %f at about" % (value))
+    pretty_print_solution(solution, integer=False)
 
 def example_call_to_branch_and_bound():
     constraint_matrix = np.array([[5,9],[1,1]], dtype=np.float64)
