@@ -196,7 +196,7 @@ def to_int(x):
 # run branch and bound
 def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     # initial "minimum" value -> infinity (beaten by any valid solution)
-    best_value = np.inf
+    best_score = np.inf
     best_solution = None
     # i is just some metadata about how many nodes were explored
     i = 1
@@ -209,14 +209,14 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
         _, _, bds = heapq.heappop(bb_heap)
         score, solution, violation = relaxed_method(a,b,c,constraints,bds)
         # either unsatisfiable constraints, or even the best available score here is worse than the best we've found so far
-        if violation > 1e-3 or score > best_value:
+        if violation > 1e-3 or score > best_score:
             pass
         # solution is integer-valued (bottom of branch)
         elif is_integer(solution):
             # if new best value, or if none previously existed, update scores and solution
             intsol = to_int(solution)
             intscore = obj_fn(a,b,c,intsol)
-            if best_value is None or intscore < best_value:
+            if intscore < best_score:
                 best_solution = intsol
                 best_score = intscore
         # need to branch , choose unconstrained index to branch on
