@@ -13,29 +13,6 @@ from scipy.optimize import LinearConstraint
 from functools import reduce
 
 
-def define_macro_constraint(nutrient: str, lower_percentage=0.45, upper_percentage=0.65):
-    # check if nutrient is in each meal
-    for m in meals.Meals:
-        if nutrient not in m.keys():
-            m[nutrient] = 0
-
-    # e.g. for carbs, 45% cal <= carbs <= 65% cal
-    # convert to grams to cal
-    macro_constraint = [(m[nutrient] * 7.71618) for m in meals.Meals]
-    lower_macro_constraint = [(m['cal'] * lower_percentage) for m in meals.Meals]
-    upper_macro_constraint = [(m['cal'] * upper_percentage) for m in meals.Meals]
-
-    # 45% cal <= carbs ( or 0 <= -45% cal + carbs)
-    macro_constraint_1 = [(-lower_macro_constraint[i] + macro_constraint[i]) for i in range(len(meals.Meals))]
-
-    # carbs <= 65% cal ( or 0 <= -carbs + 65% cal)
-    macro_constraint_2 = [(-macro_constraint[i] + upper_macro_constraint[i]) for i in range(len(meals.Meals))]
-
-    final_macro_constraint = [LinearConstraint(macro_constraint_1, [0.0], [np.inf]),
-                              LinearConstraint(macro_constraint_2, [0.0], [np.inf])]
-    return final_macro_constraint
-
-
 def define_constraint(nutrient: str, lower_bound=0.0, upper_bound=np.inf):
     # check if nutrient is in each meal
     for m in meals.Meals:
@@ -71,16 +48,39 @@ def get_nutrition_constraints():
     return linear_constraints
 
 
-def get_macro_constraints():
-    carbs_macro_constraint = define_macro_constraint("carbs", lower_percentage=0.45, upper_percentage=0.65)
-    fat_macro_constraint = define_macro_constraint("fat", lower_percentage=0.25, upper_percentage=0.35)
-    protein_macro_constraint = define_macro_constraint("protein", lower_percentage=0.10, upper_percentage=0.35)
-    macro_constraints = [carbs_macro_constraint, fat_macro_constraint, protein_macro_constraint]
-    macro_constraints = reduce(lambda x, y: x+y, macro_constraints)
-    return macro_constraints
+def get_macro_constraints(carb=0.60, fat=0.3, protein=0.10, tolerance=0.05):
+    carb_cal = np.array([(m["carbs"] * 4) for m in meals.Meals])
+    fat_cal = np.array([(m["fat"] * 9) for m in meals.Meals])
+    protein_cal = np.array([(m["protein"] * 4) for m in meals.Meals])
+    
+    cal = np.array([(m["cal"]) for m in meals.Meals])
+
+    carb_l = (carb - tolerance) * cal
+    carb_u = (carb + tolerance) * cal
+    fat_l = (fat - tolerance) * cal
+    fat_u = (fat + tolerance) * cal
+    protein_l = (protein - tolerance) * cal
+    protein_u = (protein + tolerance) * cal
+
+    arr = np.ndarray((6,len(meals.Meals)))
+    arr[0,:] = carb_cal - carb_l
+    arr[1,:] = carb_u - carb_cal
+    arr[2,:] = fat_cal - fat_l
+    arr[3,:] = fat_u - fat_cal
+    arr[4,:] = protein_cal - protein_l
+    arr[5,:] = protein_u - protein_cal
+
+    return LinearConstraint(arr, [0]*6, [np.inf]*6)
+
+    # carbs_macro_constraint = define_macro_constraint("carbs", lower_percentage=0.45, upper_percentage=0.65)
+    # fat_macro_constraint = define_macro_constraint("fat", lower_percentage=0.25, upper_percentage=0.35)
+    # protein_macro_constraint = define_macro_constraint("protein", lower_percentage=0.10, upper_percentage=0.35)
+    # macro_constraints = [carbs_macro_constraint, fat_macro_constraint, protein_macro_constraint]
+    # macro_constraints = reduce(lambda x, y: x+y, macro_constraints)
+    # return macro_constraints
 
 
-Constraints = get_nutrition_constraints() #+ get_macro_constraints()
+Constraints = get_nutrition_constraints() + [get_macro_constraints()]
 
 if __name__ == "__main__":
     print(Constraints)

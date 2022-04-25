@@ -118,12 +118,17 @@ def obj_hes(a, b, c, in_val):
 
 
 def pretty_print_solution(arr, integer=True):
+    cost = 0
     for i, v in enumerate(arr):
         name = meals.Meals[i]["name"]
         if integer and v >= 0.5:
             print(f"{name} : {int(v)}")
+            cost += int(v) * meals.Meals[i]["cost"]
         elif not integer and round(v, 3)>0:
-            print(f"{name} : {round(v, 3)}")            
+            print(f"{name} : {round(v, 3)}")
+            cost += round(v, 3) * meals.Meals[i]["cost"]
+
+    print("Cost: $", round(cost, 2))
 
 # Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be

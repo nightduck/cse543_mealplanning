@@ -8,7 +8,7 @@ bounds = Bounds([0]*len(meals.Meals), [128]*len(meals.Meals))
 print("Under no constraints")
 start = datetime.datetime.now()
 a = 1
-b = 0.25
+b = 0.15
 c = 1
 con = []
 value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
@@ -19,12 +19,20 @@ print()
 # Only calorie constraint
 print("Under calorie constraints")
 start = datetime.datetime.now()
-con.append(constraints.define_constraint("cal", lower_bound=10500, upper_bound=np.inf))
+con.append(constraints.define_constraint("cal", lower_bound=14000, upper_bound=np.inf))
 value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
 pretty_print_solution(solution)
 print(datetime.datetime.now() - start)
 print()
 
+# Add macro nutrients
+print("Under macronutrient constraints")
+start = datetime.datetime.now()
+con.append(constraints.get_macro_constraints())
+value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
+pretty_print_solution(solution)
+print(datetime.datetime.now() - start)
+print()
 
 # Add satfat and sugar constraints
 print("Under sugar and saturated fat constraints")
@@ -35,8 +43,6 @@ value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, 
 pretty_print_solution(solution)
 print(datetime.datetime.now() - start)
 print()
-
-# TODO: Add macro nutrients
 
 # Add vitamin a, c, and d
 print("Under Vitamin A, C, and D constraints")
@@ -72,6 +78,24 @@ pretty_print_solution(solution)
 print(datetime.datetime.now() - start)
 print()
 
-# TODO: Body building diet
+# Body building diet
+print("Under 3000cal and 50/20/30 carb/fat/protein")
+start = datetime.datetime.now()
+con[0] = constraints.define_constraint("cal", lower_bound=21000, upper_bound=np.inf)
+con[1] = constraints.get_macro_constraints(0.5, 0.2, 0.3)
+value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
+pretty_print_solution(solution)
+print(datetime.datetime.now() - start)
+print()
 
-# TODO: Time is valuable diet
+
+# Time is valuable diet
+print("Under 3000cal and 50/20/30 carb/fat/protein")
+b = 1
+start = datetime.datetime.now()
+con[0] = constraints.define_constraint("cal", lower_bound=14000, upper_bound=np.inf)
+con[1] = constraints.get_macro_constraints()
+value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
+pretty_print_solution(solution)
+print(datetime.datetime.now() - start)
+print()
