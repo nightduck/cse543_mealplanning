@@ -125,15 +125,16 @@ def pretty_print_solution(arr, integer=True):
         elif not integer and round(v, 3)>0:
             print(f"{name} : {round(v, 3)}")            
 
-# TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
+# Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
 # expressed in the form of predicates
-def relaxed_optimization(a, b, c, constraints, bounds):    
-    res = minimize(partial(objective_fn, a, b, c), [8] * len(meals.Meals), method="trust-constr",
+def relaxed_optimization(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals)):    
+    res = minimize(partial(objective_fn, a, b, c), primer, method="trust-constr",
             jac=partial(obj_der, a, b, c), hess=partial(obj_hes, a, b, c),
             constraints=constraints, bounds=bounds, options={'verbose': 0})
 
-    return (objective_fn(a, b, c, res.x), res.x, res.constr_violation)
+    solution = np.around(res.x, 3)
+    return (objective_fn(a, b, c, solution), solution, res.constr_violation)
 
 # Main function
 # Inputs: in_val, meals.Meals, and constraints.Constraints
@@ -197,17 +198,21 @@ def to_int(x):
 def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     # initial "minimum" value -> infinity (beaten by any valid solution)
     best_score = np.inf
-    best_solution = None
-    # i is just some metadata about how many nodes were explored
+    best_solution = [np.inf] * len(meals.Meals)
+    # i is an index to track previously calculated solutions, which can be used as initial
+    # conditions to accelerate the computation of their children
     i = 1
+    precomp_solutions = [[1]*len(meals.Meals)]
     # base constraints for the root of the tree
     # as we branch, we add additional constraints (e.g. num bagels > 3, num pasta < 4, etc)
     # dummy score to start off with
-    bb_heap = [(0,0, bounds)]
+    bb_heap = [(0, 0, bounds)]
     # while some branches have yet to be explored
     while len(bb_heap) > 0:
-        _, _, bds = heapq.heappop(bb_heap)
-        score, solution, violation = relaxed_method(a,b,c,constraints,bds)
+        _, j, bds = bb_heap.pop()
+        primer = precomp_solutions[j]
+
+        score, solution, violation = relaxed_method(a,b,c,constraints,bds,primer=primer)
         # either unsatisfiable constraints, or even the best available score here is worse than the best we've found so far
         if violation > 1e-3 or score > best_score:
             pass
@@ -221,14 +226,17 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
                 best_score = intscore
         # need to branch , choose unconstrained index to branch on
         else:
+            precomp_solutions.append(solution)
+
             # find index to branch on, create new inequality constraints
             index = find_noninteger(solution)
             new_children = branch(bds, solution[index], index)
             # create new node with updated constraints
             # min-heap sorted by score of solution, tie-broken by index
             for child in new_children:
-                heapq.heappush(bb_heap, (score, i, child))
-                i=i+1
+                bb_heap.append((score, i, child))
+                j += 1
+            i=i+1
     # if it returns None, it never found an integer solution. Hopefully shouldn't happen.
     print(f"Total nodes explored: {i}")
     return best_score, best_solution
@@ -314,6 +322,7 @@ for i, meal in enumerate(meals.Meals):
         j = tag_index[t]
         coefs[i, j] += meal["cal"] / len(meal["tags"])
 
-example_call_to_relaxed_optimize()
 
-example_call_to_branch_and_bound()
+if __name__ == "__main__":
+    example_call_to_relaxed_optimize()
+    example_call_to_branch_and_bound()
