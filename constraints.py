@@ -48,11 +48,11 @@ def define_constraint(nutrient: str, lower_bound=0.0, upper_bound=np.inf):
 
 def get_nutrition_constraints():
     cal_constraint = define_constraint("cal", lower_bound=10500, upper_bound=np.inf)                # in cal
-    carbs_constraint = define_constraint("carbs", lower_bound=1828.75, upper_bound=2310)            # in g
-    protein_constraint = define_constraint("protein", lower_bound=332.5, upper_bound=420)           # in g
-    fat_constraint = define_constraint("fat", lower_bound=518.7, upper_bound=655.2)                 # in g
-    sugar_constraint = define_constraint("sugar", lower_bound=332.5, upper_bound=420)               # in g
-    satfat_constraint = define_constraint("satfat", lower_bound=133, upper_bound=168)               # in g
+    # carbs_constraint = define_constraint("carbs", lower_bound=1828.75, upper_bound=2310)            # in g
+    # protein_constraint = define_constraint("protein", lower_bound=332.5, upper_bound=420)           # in g
+    # fat_constraint = define_constraint("fat", lower_bound=518.7, upper_bound=655.2)                 # in g
+    sugar_constraint = define_constraint("sugar", lower_bound=0, upper_bound=420)               # in g
+    satfat_constraint = define_constraint("satfat", lower_bound=0, upper_bound=168)               # in g
     fiber_constraint = define_constraint("fiber", lower_bound=186.2, upper_bound=235.2)             # in g
     sodium_constraint = define_constraint("sodium", lower_bound=15295, upper_bound=19320)           # in mg
     vita_constraint = define_constraint("vita", lower_bound=19950, upper_bound=25200)               # in IU
@@ -64,10 +64,10 @@ def get_nutrition_constraints():
     iron_constraint = define_constraint("iron", lower_bound=119.7, upper_bound=151.2)               # in mg
     potassium_constraint = define_constraint("potassium", lower_bound=31255, upper_bound=39480)     # in mg
 
-    linear_constraints = [cal_constraint, carbs_constraint, protein_constraint, fat_constraint, sugar_constraint,
-                          satfat_constraint, fiber_constraint, sodium_constraint, vita_constraint, vitc_constraint,
-                          vitd_constraint, vite_constraint, vitb12_constraint, calcium_constraint, iron_constraint,
-                          potassium_constraint]
+    linear_constraints = [cal_constraint, sugar_constraint,
+                           satfat_constraint, fiber_constraint, sodium_constraint, vita_constraint, vitc_constraint,
+                           vitd_constraint, vite_constraint, vitb12_constraint, calcium_constraint, iron_constraint,
+                           potassium_constraint]
     return linear_constraints
 
 
@@ -80,7 +80,7 @@ def get_macro_constraints():
     return macro_constraints
 
 
-Constraints = get_nutrition_constraints() + get_macro_constraints()
+Constraints = get_nutrition_constraints() #+ get_macro_constraints()
 
 if __name__ == "__main__":
     print(Constraints)

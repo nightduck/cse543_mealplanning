@@ -128,11 +128,11 @@ def pretty_print_solution(arr, integer=True):
 # TODO(Oren): Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
 # expressed in the form of predicates
-def relaxed_optimization(a, b, c, constraints, bounds):    
-    res = minimize(partial(objective_fn, a, b, c), [8] * len(meals.Meals), method="trust-constr",
+def relaxed_optimization(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals)):    
+    res = minimize(partial(objective_fn, a, b, c), primer, method="trust-constr",
             jac=partial(obj_der, a, b, c), hess=partial(obj_hes, a, b, c),
-            constraints=constraints, bounds=bounds, options={'verbose': 0})
-
+            constraints=constraints, bounds=bounds, options={'maxiter':10000, 'verbose':0})
+    #print(res.cg_stop_cond)
     return (objective_fn(a, b, c, res.x), res.x, res.constr_violation)
 
 # Main function
@@ -196,18 +196,21 @@ def to_int(x):
 # run branch and bound
 def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     # initial "minimum" value -> infinity (beaten by any valid solution)
-    best_value = np.inf     # Best integer solution
-    best_solution = None
-    best_score = None       # Best relaxed solution
-    # i is just some metadata about how many nodes were explored
+    best_solution = [np.inf] * len(meals.Meals)
+    best_score = np.inf       # Best integer solution
+    # i is just some metadata about how many nodes were explored, also helps store results of
+    # parent computation
     i = 1
+    j = 1
+
+    precomp_solutions = [[8]*len(meals.Meals)]
     # base constraints for the root of the tree
     # as we branch, we add additional constraints (e.g. num bagels > 3, num pasta < 4, etc)
     # dummy score to start off with
-    bb_heap = [(np.inf,0, bounds)]
+    bb_heap = [(np.inf, 0, bounds)]
     # while some branches have yet to be explored
     while len(bb_heap) > 0:
-        _, _, bds = heapq.heappop(bb_heap)
+        _, j, bds = bb_heap.pop()
 
         state = []
         for l, u in zip(bds.lb, bds.ub):
@@ -219,34 +222,47 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
                 state.append('-')
         print("Exploring: ", str(state))
         
-        score, solution, violation = relaxed_method(a,b,c,constraints,bds)
+        primer = precomp_solutions[j]
+        score, solution, violation = relaxed_method(a,b,c,constraints,bds,primer=primer)
 
-        print("Relaxed score of %f", score)
+        print("Relaxed score of", score)
 
         # either unsatisfiable constraints, or even the best available score here is worse than the best we've found so far
-        if violation > 1e-3 or score > best_value:
+        if violation > 1e-3 or score > best_score + 25:
+            print("Trimmed")
             pass
         # solution is integer-valued (bottom of branch)
         elif is_integer(solution):
             # if new best value, or if none previously existed, update scores and solution
             intsol = to_int(solution)
             intscore = obj_fn(a,b,c,intsol)
-            if intscore < best_value:
+            if intscore < best_score:
                 best_solution = intsol
-                best_value = intscore
+                best_score = intscore
+                print("New integer solution -", best_score, ":", best_solution)
         # need to branch , choose unconstrained index to branch on
         else:
+            precomp_solutions.append(solution)
+
+            # Get a preliminary rounded solution, to help with trimming
+            rounded_solution = np.around(solution)
+            rounded_score = objective_fn(a, b, c, rounded_solution)
+            if rounded_score < best_score:
+                best_score = rounded_score
+                best_solution = rounded_solution
+
             # find index to branch on, create new inequality constraints
             index = find_noninteger(solution)
             new_children = branch(bds, solution[index], index)
             # create new node with updated constraints
             # min-heap sorted by score of solution, tie-broken by index
             for child in new_children:
-                heapq.heappush(bb_heap, (score, i, child))
-                i=i+1
+                bb_heap.append((score, i, child))
+                j += 1
+            i=i+1
     # if it returns None, it never found an integer solution. Hopefully shouldn't happen.
     print(f"Total nodes explored: {i}")
-    return best_value, best_solution
+    return best_score, best_solution
 
 
 # TODO: Assess constraints, and if any are false, trim that branch of searching
@@ -329,7 +345,7 @@ for i, meal in enumerate(meals.Meals):
         j = tag_index[t]
         coefs[i, j] += meal["cal"] / len(meal["tags"])
 
-#example_call_to_relaxed_optimize()
+example_call_to_relaxed_optimize()
 
 #example_call_to_branch_and_bound()
 
