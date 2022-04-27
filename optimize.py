@@ -24,9 +24,6 @@ def time_der(in_val):
     return [meals.Meals[i]["time"] for i, n in enumerate(in_val)]
 
 def tag_occurance(in_val):
-    # Litle buffering to not repeat computation for function, derivative, and hessian
-    if in_val == in_val_buffer:
-        return occurances_buffer
 
     # TODO(Oren Bell): This is a sparse matrix operation, so there's a faster way to do it
     # Multiple 1xn vector by nxm matrix to get 1xm vector
@@ -43,11 +40,11 @@ def tag_occurance(in_val):
     #         j = tag_index[t]
     #         occurances[j] += n * coefs[i, j]
     
-    occurances_buffer = occurances
     return occurances
 
 def entropy(in_val):
-    occurances = tag_occurance(in_val)
+    cal_sum = sum([m["cal"] * n for m, n in zip(meals.Meals, in_val)])
+    occurances = (in_val * coefs) / cal_sum
 
     variance = 0
     for p in occurances:
@@ -61,26 +58,44 @@ def entropy(in_val):
     return variance
 
 def entropy_der(in_val):
-    occurances = tag_occurance(in_val)
-    total = np.sum(occurances)
+    cal_sum = sum([m["cal"] * n for m, n in zip(meals.Meals, in_val)])
 
     gradient = np.zeros(len(in_val))
+    for i, x in enumerate(in_val):
+        lnx = math.log(x)
+        b_i = coefs[i,:] / cal_sum
+        dx = - sum(b_i * lnx + b_i)
+        gradient[i] = dx
 
-    for i in range(len(in_val)):
-
-        # Compute summatation at this entry in vector
-        result = 0
-        for j, p in enumerate(occurances):
-            coef = coefs[i, j] / total
-            if coef != 0:   # If coef is zero, then dp/dx is zero
-                if p == 0:  # If p is zero anyways, then x is zero, and dp/dx is inf
-                    assert(in_val[i] == 0)
-                    result = math.inf
-                else:
-                    result -= coef + coef * math.log(p / total)
-        gradient[i] = result
-    
+    assert(sum(gradient * [m["cal"] * n for m, n in zip(meals.Meals, in_val)]) == 0)
     return gradient
+
+# def entropy_der(in_val):
+#     occurances = tag_occurance(in_val)
+#     total = np.sum(occurances)
+
+#     gradient = np.zeros(len(in_val))
+
+#     cal = np.array([m["cal"] for m in meals.Meals])
+#     sum_cal = sum(cal * in_val)
+
+#     for i in range(len(in_val)):
+
+#         # Compute summatation at this entry in vector
+#         result = 0
+#         for j, p in enumerate(occurances):
+#             coef = coefs[i, j] / sum_cal
+#             if coef != 0:   # If coef is zero, then dp/dx is zero
+#                 if p == 0:  # If p is zero anyways, then x is zero, and dp/dx is inf
+#                     assert(in_val[i] == 0)
+#                     result = math.inf
+#                 else:
+#                     result -= coef + coef * math.log(p / total)
+#         gradient[i] = result
+    
+#     cal = np.array([m["cal"] for m in meals.Meals])
+#     assert(sum(gradient * cal) == 0)
+#     return gradient
 
 def entropy_hes(in_val):
     occurances = tag_occurance(in_val)
@@ -329,5 +344,8 @@ for i, meal in enumerate(meals.Meals):
 
 
 if __name__ == "__main__":
-    example_call_to_relaxed_optimize()
-    example_call_to_branch_and_bound()
+    # example_call_to_relaxed_optimize()
+    # example_call_to_branch_and_bound()
+    a = np.ndarray(36)
+    a.fill(2)
+    entropy_der(a)
