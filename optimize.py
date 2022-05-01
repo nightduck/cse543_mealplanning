@@ -24,137 +24,91 @@ def time_der(in_val):
     return [meals.Meals[i]["time"] for i, n in enumerate(in_val)]
 
 def tag_occurance(in_val):
-
     # TODO(Oren Bell): This is a sparse matrix operation, so there's a faster way to do it
     # Multiple 1xn vector by nxm matrix to get 1xm vector
     occurances = np.matmul(in_val, coefs)
     total = np.sum(occurances)
     occurances = occurances / total
-
-
-    # occurances = np.ndarray(len(tag_index))
-
-    # for i, n in enumerate(in_val):
-    #     meal = meals.Meals[i]
-    #     for t in meal["tags"]:
-    #         j = tag_index[t]
-    #         occurances[j] += n * coefs[i, j]
     
     return occurances
 
 def entropy(in_val):
-    cal_sum = sum([m["cal"] * n for m, n in zip(meals.Meals, in_val)])
-    occurances = (in_val * coefs) / cal_sum
+    #in_val = np.reshape(input, (1,36))
+    cal_sum = np.matmul(cals, in_val)
+    occurances = np.matmul(in_val, coefs) / cal_sum
 
     variance = 0
     for p in occurances:
-        if p != 0:
-            try:
-                variance -= p * math.log(p)
-            except Exception as err:
-                print(p)
-                raise err
+        if p > 0:
+            variance -= p * math.log(p)
 
     return variance
 
 def entropy_der(in_val):
-    cal_sum = sum([m["cal"] * n for m, n in zip(meals.Meals, in_val)])
+    cal_sum = np.matmul(cals, in_val)
 
     gradient = np.zeros(len(in_val))
     for i, x in enumerate(in_val):
-        lnx = math.log(x)
+        lnx = math.log(x) if x > 0 else -1e82
         b_i = coefs[i,:] / cal_sum
         dx = - sum(b_i * lnx + b_i)
         gradient[i] = dx
 
-    assert(sum(gradient * [m["cal"] * n for m, n in zip(meals.Meals, in_val)]) == 0)
+    #assert(sum(gradient * [m["cal"] * n for m, n in zip(meals.Meals, in_val)]) == 0)
     return gradient
 
-# def entropy_der(in_val):
-#     occurances = tag_occurance(in_val)
-#     total = np.sum(occurances)
-
-#     gradient = np.zeros(len(in_val))
-
-#     cal = np.array([m["cal"] for m in meals.Meals])
-#     sum_cal = sum(cal * in_val)
-
-#     for i in range(len(in_val)):
-
-#         # Compute summatation at this entry in vector
-#         result = 0
-#         for j, p in enumerate(occurances):
-#             coef = coefs[i, j] / sum_cal
-#             if coef != 0:   # If coef is zero, then dp/dx is zero
-#                 if p == 0:  # If p is zero anyways, then x is zero, and dp/dx is inf
-#                     assert(in_val[i] == 0)
-#                     result = math.inf
-#                 else:
-#                     result -= coef + coef * math.log(p / total)
-#         gradient[i] = result
-    
-#     cal = np.array([m["cal"] for m in meals.Meals])
-#     assert(sum(gradient * cal) == 0)
-#     return gradient
-
 def entropy_hes(in_val):
-    occurances = tag_occurance(in_val)
-    total = np.sum(occurances)
+    cal_sum = np.matmul(cals, in_val)
+    hessian = np.identity(len(in_val))
 
-    hessian = np.zeros((len(in_val), len(in_val)))
-
-    for a, xa in enumerate(in_val):
-        for b, xb in enumerate(in_val):
-
-            # Compute sumation at this entry in matrix
-            result = 0
-            for j, p in enumerate(occurances):
-                coef_aj = coefs[a, j] / total
-                coef_bj = coefs[b, j] / total
-                if coef_aj != 0 and coef_bj != 0:
-                    if p == 0:
-                        result = -math.inf
-                    else:
-                        result -= coef_aj * coef_bj / p / total
-
-            hessian[a,b] = result
+    for i, v in enumerate(in_val):
+        v = v if v > 0 else 1e-9
+        hessian[i,i] = - sum(coefs[i,:]) / (v * cal_sum)
 
     return hessian
 
 def objective_fn(a, b, c, in_val):
-    return np.multiply(a, cost(in_val)) + np.multiply(b, time(in_val)) #- np.multiply(c, entropy(in_val))
+    return np.multiply(a, cost(in_val)) + np.multiply(b, time(in_val)) - np.multiply(c, entropy(in_val))
 
 def obj_der(a, b, c, in_val):
-    return np.multiply(a, cost_der(in_val)) + np.multiply(b, time_der(in_val)) #- np.multiply(c, entropy_der(in_val))
+    return np.multiply(a, cost_der(in_val)) + np.multiply(b, time_der(in_val)) - np.multiply(c, entropy_der(in_val))
 
 def obj_hes(a, b, c, in_val):
-    return np.zeros((len(in_val), len(in_val)))
-    #return - c*entropy_hes(in_val)
+    #return np.zeros((len(in_val), len(in_val)))
+    return - c*entropy_hes(in_val)
 
 
 def pretty_print_solution(arr, integer=True):
+    if any([a == np.inf or a == None for a in arr]):
+        print("No solution exists")
+        return
+
     cost = 0
+    time = 0
     for i, v in enumerate(arr):
         name = meals.Meals[i]["name"]
         if integer and v >= 0.5:
             print(f"{name} : {int(v)}")
             cost += int(v) * meals.Meals[i]["cost"]
+            time += int(v) * meals.Meals[i]["time"]
         elif not integer and round(v, 3)>0:
             print(f"{name} : {round(v, 3)}")
             cost += round(v, 3) * meals.Meals[i]["cost"]
+            time += round(v, 3) * meals.Meals[i]["time"]
 
+    print("Time:", round(time), "min")
     print("Cost: $", round(cost, 2))
 
 # Nonlinear optimizer, given optimization fn, list of equality constraints, and list
 # of inequality constraints, return an optimal solution. This meants constraints can't be
 # expressed in the form of predicates
-def relaxed_optimization(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals)):    
-    res = minimize(partial(objective_fn, a, b, c), primer, method="trust-constr",
-            jac=partial(obj_der, a, b, c), hess=partial(obj_hes, a, b, c),
-            constraints=constraints, bounds=bounds, options={'verbose': 0})
+def relaxed_optimization(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals)):
+    res = minimize(partial(objective_fn, a, b, c), primer, method="SLSQP",
+            jac=partial(obj_der, a, b, c), #hess=partial(obj_hes, a, b, c),
+            constraints=constraints, bounds=bounds)#, options={'verbose': 0})
 
     solution = np.around(res.x, 3)
-    return (objective_fn(a, b, c, solution), solution, res.constr_violation)
+    return (objective_fn(a, b, c, solution), solution, 0 if res.success else 0)
 
 # Main function
 # Inputs: in_val, meals.Meals, and constraints.Constraints
@@ -181,6 +135,20 @@ def branch(bounds, split_value, index):
     # make two bounds constraints: old_lower <= variable < floor, ceil < variable <= old_upper
     # (lower branch = old constraint modified in-place, upper branch = new constraint)
     return [bounds, Bounds(right_lower, right_upper)]
+
+def convert_constraints_to_dict(con):
+    def ineq_fn(A, b, x):
+        # Turn linear constraints from matrices to functions
+        return np.matmul(A, x) - b
+
+    # Should output scalars, so address any multi-row constraints
+    con_upper = [{"type": "ineq",
+                "fun": partial(ineq_fn, np.multiply(c.A, -1), c.ub[0] * -1),
+                "jac" : lambda x : np.multiply(c.A, -1)}
+                for c in con if c.ub[0] != np.inf]
+    con_lower = [{"type": "ineq", "fun": partial(ineq_fn, c.A, c.lb[0]), "jac" : lambda x : c.A} for c in con]
+
+    return con_upper + con_lower
 
 # return true iff solution is entirely integers
 def is_integer(solution):
@@ -216,6 +184,8 @@ def to_int(x):
     return [round(a) for a in x]
 # run branch and bound
 def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
+    #constraints = convert_constraints_to_dict(constraints)
+
     # initial "minimum" value -> infinity (beaten by any valid solution)
     best_score = np.inf
     best_solution = [np.inf] * len(meals.Meals)
@@ -233,6 +203,7 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
         primer = precomp_solutions[j]
 
         score, solution, violation = relaxed_method(a,b,c,constraints,bds,primer=primer)
+        #print("%f at %s" % (score, str(solution)))
         # either unsatisfiable constraints, or even the best available score here is worse than the best we've found so far
         if violation > 1e-3 or score > best_score:
             pass
@@ -294,7 +265,6 @@ def example_call_to_relaxed_optimize():
     # Equality constraints here are modelled as two opposing inequality constraints
     
     # Tri will provide an array of these LinearConstraint's
-    cals = [m["cal"] for m in meals.Meals]
     linear_constraints = [LinearConstraint(cals, [17500], [np.inf])]
 
     # Redefine bounds for the whole input space
@@ -342,6 +312,7 @@ for i, meal in enumerate(meals.Meals):
         j = tag_index[t]
         coefs[i, j] += meal["cal"] / len(meal["tags"])
 
+cals = np.array([m["cal"] for m in meals.Meals])
 
 if __name__ == "__main__":
     # example_call_to_relaxed_optimize()

@@ -9,7 +9,7 @@ print("Under no constraints")
 start = datetime.datetime.now()
 a = 1
 b = 0.15
-c = 1
+c = 0.01
 con = []
 value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
 pretty_print_solution(solution)
@@ -90,11 +90,24 @@ print()
 
 
 # Time is valuable diet
-print("Under 3000cal and 50/20/30 carb/fat/protein")
+print("Only value time")
+a = 0
 b = 1
+c = 0
 start = datetime.datetime.now()
 con[0] = constraints.define_constraint("cal", lower_bound=14000, upper_bound=np.inf)
 con[1] = constraints.get_macro_constraints()
+value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
+pretty_print_solution(solution)
+print(datetime.datetime.now() - start)
+print()
+
+# Money is valuable diet
+print("Only value money")
+a = 1
+b = 0
+c = 0
+start = datetime.datetime.now()
 value, solution = branch_and_bound(relaxed_optimization, objective_fn, a, b, c, con, bounds)
 pretty_print_solution(solution)
 print(datetime.datetime.now() - start)
