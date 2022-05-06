@@ -35,6 +35,8 @@ def tag_occurance(in_val):
 def entropy(in_val):
     #in_val = np.reshape(input, (1,36))
     cal_sum = np.matmul(cals, in_val)
+    if cal_sum == 0:    # Special case taking the limit
+        return math.log(1 / len(in_val))
     occurances = np.matmul(in_val, coefs) / cal_sum
 
     variance = 0
@@ -105,10 +107,95 @@ def pretty_print_solution(arr, integer=True):
 def relaxed_optimization(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals)):
     res = minimize(partial(objective_fn, a, b, c), primer, method="SLSQP",
             jac=partial(obj_der, a, b, c), #hess=partial(obj_hes, a, b, c),
-            constraints=constraints, bounds=bounds)#, options={'verbose': 0})
+            constraints=constraints, bounds=bounds, options={'maxiter': 100000})
 
     solution = np.around(res.x, 3)
     return (objective_fn(a, b, c, solution), solution, 0 if res.success else 0)
+
+def multiplier_method(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals)):
+    solution = primer
+    # scaling_factor = 1
+    # gradient = obj_der(a, b, c, solution)
+
+    # while scaling_factor > 0.001:
+    #     norm = gradient / np.linalg.norm(gradient) * scaling_factor
+
+    #     solution -= norm
+
+    #     new_gradient = obj_der(a,b,c,solution)
+    #     old_unit = gradient / np.linalg.norm(gradient)
+    #     new_unit = new_gradient / np.linalg.norm(new_gradient)
+    #     if np.arccos(np.dot(new_unit, old_unit)) > np.pi / 2:
+    #         scaling_factor *= 0.9
+    #     gradient = new_gradient
+
+    lambdas = np.zeros(2*sum([len(con.lb) for con in constraints]) + 2*len(meals.Meals))
+    constraint_matrix = np.zeros((lambdas.shape[0], len(meals.Meals)))
+    constraint_constants = np.zeros(lambdas.shape[0])
+    ck = 1
+    scaling_factor = 1
+
+    i = 0
+    for con in constraints:
+        constraint_matrix[i:i+len(con.lb),:] = con.A
+        constraint_constants[i:i+len(con.lb)] = con.ub
+        i += len(con.lb)
+
+        constraint_matrix[i:i+len(con.lb),:] = np.multiply(con.A, -1)
+        constraint_constants[i:i+len(con.lb)] = np.multiply(con.lb, -1)
+        i += len(con.lb)
+    
+    constraint_matrix[i:i+len(bounds.ub),:] = np.identity(len(bounds.ub))
+    constraint_constants[i:i+len(bounds.ub)] = bounds.ub
+    i += len(bounds.ub)
+    constraint_matrix[i:i+len(bounds.lb),:] = -1 * np.identity(len(bounds.lb))
+    constraint_constants[i:i+len(bounds.lb)] = np.multiply(bounds.lb, -1)
+    i += len(bounds.lb)
+
+    # Update the lambdas via the multiplier method
+    violation = 0
+    for i, con in enumerate(constraint_matrix):
+        g = np.matmul(con, solution) - constraint_constants[i]
+        if g > 0:       # Constraint is active. Update lambda
+            lambdas[i] += ck * g
+            violation += g
+        else:           # Constraint in inactive, disable lambda
+            lambdas[i] = 0
+    old_violation = violation
+
+    gradient = obj_der(a,b,c,solution) + np.matmul(lambdas, constraint_matrix)
+
+
+    while scaling_factor > 1e-4:
+        norm = gradient / np.linalg.norm(gradient) * scaling_factor
+
+        solution -= norm
+
+        # Update the lambdas via the multiplier method
+        violation = 0
+        for i, con in enumerate(constraint_matrix):
+            g = np.matmul(con, solution) - constraint_constants[i]
+            if g > 0:       # Constraint is active. Update lambda
+                lambdas[i] += ck * g
+                lambdas[i] = max(lambdas[i], 1e128)
+                violation += g
+            else:           # Constraint in inactive, disable lambda
+                lambdas[i] = 0
+
+        if (old_violation == 0 or violation / old_violation > 0.75) and ck < 1e128:
+            ck *= 1.5
+        old_violation = violation
+
+        new_gradient = obj_der(a,b,c,solution) + np.matmul(lambdas, constraint_matrix)
+
+        old_unit = gradient / np.linalg.norm(gradient)
+        new_unit = new_gradient / np.linalg.norm(new_gradient)
+        if np.arccos(np.clip(np.dot(new_unit, old_unit),-1,1)) > np.pi / 2:
+            scaling_factor *= 0.9 + (np.tanh(np.log(violation)) / 10)  # Small violation means the change is 0.9,
+                                                                # large violation means the change is 1 (same)
+        gradient = new_gradient
+
+    return objective_fn(a,b,c, solution), solution, violation
 
 # Main function
 # Inputs: in_val, meals.Meals, and constraints.Constraints
@@ -134,7 +221,17 @@ def branch(bounds, split_value, index):
         # also special case
     # make two bounds constraints: old_lower <= variable < floor, ceil < variable <= old_upper
     # (lower branch = old constraint modified in-place, upper branch = new constraint)
-    return [bounds, Bounds(right_lower, right_upper)]
+    # Return the one with the narrowest search space last, so it get processed first
+    if right_upper[index] - split_value > split_value - bounds.lb[index]:
+        return [Bounds(right_lower, right_upper), bounds]
+    else:
+        return [bounds, Bounds(right_lower, right_upper)]
+
+# Work as above except it always splits the bounds in half, rather that using the solutions as
+# a recommended split point. This avoids the tendency to run in O(n) time when chasing constraints
+def log_branch(bounds, index):
+    split_value = (bounds.ub[index] - bounds.lb[index]) / 2 + bounds.lb[index]
+    branch(bounds, split_value, index)
 
 def convert_constraints_to_dict(con):
     def ineq_fn(A, b, x):
@@ -305,7 +402,7 @@ for m in meals.Meals:
             tag_index[t] = counter
             counter += 1
 
-coefs = np.ndarray((len(meals.Meals), len(tag_index)), dtype=np.float64)
+coefs = np.zeros((len(meals.Meals), len(tag_index)), dtype=np.float64)
 
 for i, meal in enumerate(meals.Meals):
     for t in meal["tags"]:
@@ -317,6 +414,9 @@ cals = np.array([m["cal"] for m in meals.Meals])
 if __name__ == "__main__":
     # example_call_to_relaxed_optimize()
     # example_call_to_branch_and_bound()
-    a = np.ndarray(36)
-    a.fill(2)
-    entropy_der(a)
+    # a = np.ndarray(36)
+    # a.fill(2)
+    # entropy_der(a)
+    _, result, _ = multiplier_method(0, 1, 0, [constraints.define_constraint("cal", lower_bound=10500, upper_bound=np.inf)],
+            Bounds([0]*len(meals.Meals), [6]*len(meals.Meals)))
+    pretty_print_solution(result, integer=False)
