@@ -152,12 +152,12 @@ def multiplier_method(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals))
     constraint_constants[i:i+len(bounds.lb)] = np.multiply(bounds.lb, -1)
     i += len(bounds.lb)
 
-    # Update the lambdas via the multiplier method
+    # Update the lambdas via gradient descent (their derivative is just their constraint function)
     violation = 0
     for i, con in enumerate(constraint_matrix):
         g = np.matmul(con, solution) - constraint_constants[i]
         if g > 0:       # Constraint is active. Update lambda
-            lambdas[i] += ck * g
+            lambdas[i] += g
             violation += g
         else:           # Constraint in inactive, disable lambda
             lambdas[i] = 0
@@ -165,8 +165,8 @@ def multiplier_method(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals))
 
     gradient = obj_der(a,b,c,solution) + np.matmul(lambdas, constraint_matrix)
 
-
-    while scaling_factor > 1e-4:
+    solution_exists = False
+    while scaling_factor > 1e-4 or (violation > 1e-3 and solution_exists):
         norm = gradient / np.linalg.norm(gradient) * scaling_factor
 
         solution -= norm
@@ -176,22 +176,24 @@ def multiplier_method(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals))
         for i, con in enumerate(constraint_matrix):
             g = np.matmul(con, solution) - constraint_constants[i]
             if g > 0:       # Constraint is active. Update lambda
-                lambdas[i] += ck * g
+                lambdas[i] += g
                 lambdas[i] = max(lambdas[i], 1e128)
                 violation += g
             else:           # Constraint in inactive, disable lambda
                 lambdas[i] = 0
 
-        if (old_violation == 0 or violation / old_violation > 0.75) and ck < 1e128:
-            ck *= 1.5
+        # if (old_violation == 0 or violation / old_violation > 0.75) and ck < 1e128:
+        #     ck *= 1.5
         old_violation = violation
+        if violation == 0:
+            solution_exists = True
 
         new_gradient = obj_der(a,b,c,solution) + np.matmul(lambdas, constraint_matrix)
 
         old_unit = gradient / np.linalg.norm(gradient)
         new_unit = new_gradient / np.linalg.norm(new_gradient)
         if np.arccos(np.clip(np.dot(new_unit, old_unit),-1,1)) > np.pi / 2:
-            scaling_factor *= 0.9 + (np.tanh(np.log(violation)) / 10)  # Small violation means the change is 0.9,
+            scaling_factor *= 0.9 + (np.tanh(np.sqrt(violation)) / 10)  # Small violation means the change is 0.9,
                                                                 # large violation means the change is 1 (same)
         gradient = new_gradient
 
