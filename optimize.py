@@ -199,15 +199,9 @@ def multiplier_method(a, b, c, constraints, bounds, primer=[1]*len(meals.Meals))
 
     return objective_fn(a,b,c, solution), solution, violation
 
-# Main function
-# Inputs: in_val, meals.Meals, and constraints.Constraints
-# TODO: Branch and bound here, with that relaxation thing whatchamacallit
 # branch: create a set of children, which are just represented as an additional constraint, setting
 # a certain meal to be used a certain number of times.
 def branch(bounds, split_value, index):
-    # first will be <= 0 if x[index] <= split_value, second will be <= 0 if x[index] > split_value
-    # TODO: rather than always add additional inequality bounds, check list of bounds to add equality bound as needed
-    # also, check for any conflicting bounds
     right_lower = np.copy(bounds.lb)
     right_upper = np.copy(bounds.ub)
     # set upper bound of left branch to floor of found value
@@ -218,9 +212,7 @@ def branch(bounds, split_value, index):
         right_lower[index] = right_upper[index]
     if bounds.lb[index] >= bounds.ub[index]:
         bounds.lb[index] = bounds.ub[index]
-         # special case
-    # elif bounds.lb[index] >= bounds.ub[index]:
-        # also special case
+
     # make two bounds constraints: old_lower <= variable < floor, ceil < variable <= old_upper
     # (lower branch = old constraint modified in-place, upper branch = new constraint)
     # Return the one with the narrowest search space last, so it get processed first
@@ -249,7 +241,7 @@ def convert_constraints_to_dict(con):
 
     return con_upper + con_lower
 
-# return true iff solution is entirely integers
+# return true iff solution is entirely integers (or at least pretty close)
 def is_integer(solution):
     return all([abs(round(x)-x) <= 5e-3 for x in solution])
 
@@ -260,6 +252,11 @@ def find_noninteger(solution):
             return i
     return -1
 
+# cast output to integer
+def to_int(x):
+    return [round(a) for a in x]
+
+# example
 def ex_opt(x):
     return -5*x[0]-8*x[1]
 
@@ -279,9 +276,19 @@ def ex_test_opt(a,b,c,cons,bds):
 
     return (ex_opt(res.x), res.x, res.constr_violation)
 
-def to_int(x):
-    return [round(a) for a in x]
-# run branch and bound
+
+# Some pseudocode for the general algorithm
+# Input: in_val is list of tuples, with each tuple representing a range of integer values that
+#        particular input could be, eg [(8, 15), (0, 31), (0, 31)] means
+#        8 <= x1 <= 15,  0 <= x2 <= 32,  0 <= x3 <= 32
+#
+# When performing a branch, take an arbitrary input, and cut its range in half, creating two
+# new nodes in the branch and bound graph. So [(8, 15), (0, 31), (0, 31)] could become
+# [(8, 15), (0, 15), (0, 31)]  and  [(8, 15), (16, 31), (0, 31)]
+#
+# When each tuple is two of the same numbers (eg 4 <= xi <= 4), then xi = 4
+# Test for this case with (returns T/F):    all([x == y for x,y in in_val])
+# Simplify list and remove tuples with:     new_list = [x for x,y in in_val]
 def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     #constraints = convert_constraints_to_dict(constraints)
 
@@ -295,10 +302,10 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
     # base constraints for the root of the tree
     # as we branch, we add additional constraints (e.g. num bagels > 3, num pasta < 4, etc)
     # dummy score to start off with
-    bb_heap = [(0, 0, bounds)]
+    bb_stack = [(0, bounds)]
     # while some branches have yet to be explored
-    while len(bb_heap) > 0:
-        _, j, bds = bb_heap.pop()
+    while len(bb_stack) > 0:
+        j, bds = bb_stack.pop()
         primer = precomp_solutions[j]
 
         score, solution, violation = relaxed_method(a,b,c,constraints,bds,primer=primer)
@@ -324,28 +331,12 @@ def branch_and_bound(relaxed_method, obj_fn, a, b, c, constraints, bounds):
             # create new node with updated constraints
             # min-heap sorted by score of solution, tie-broken by index
             for child in new_children:
-                bb_heap.append((score, i, child))
+                bb_stack.append((i, child))
                 j += 1
             i=i+1
     # if it returns None, it never found an integer solution. Hopefully shouldn't happen.
     print(f"Total nodes explored: {i}")
     return best_score, best_solution
-
-
-# TODO: Assess constraints, and if any are false, trim that branch of searching
-
-# TODO: Some pseudocode for the general algorithm
-# Input: in_val is list of tuples, with each tuple representing a range of integer values that
-#        particular input could be, eg [(8, 15), (0, 31), (0, 31)] means
-#        8 <= x1 <= 15,  0 <= x2 <= 32,  0 <= x3 <= 32
-#
-# When performing a branch, take an arbitrary input, and cut its range in half, creating two
-# new nodes in the branch and bound graph. So [(8, 15), (0, 31), (0, 31)] could become
-# [(8, 15), (0, 15), (0, 31)]  and  [(8, 15), (16, 31), (0, 31)]
-#
-# When each tuple is two of the same numbers (eg 4 <= xi <= 4), then xi = 4
-# Test for this case with (returns T/F):    all([x == y for x,y in in_val])
-# Simplify list and remove tuples with:     new_list = [x for x,y in in_val]
 
 def example_call_to_relaxed_optimize():
     # If you want to bound a variable, add a constraint. Constraints are modelled as follows
